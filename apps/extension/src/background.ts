@@ -45,16 +45,35 @@ chrome.commands.onCommand.addListener(async (command) => {
 
 chrome.runtime.onMessage.addListener((message: ExtensionRequest, _sender, sendResponse) => {
   if (message?.type !== "at:translate") return undefined;
+  const tabId = _sender.tab?.id;
   void (async () => {
+    const reply = (response: ExtensionResponse): void => {
+      if (tabId !== undefined) {
+        // Content scripts can lose the reply port when the service worker is
+        // recycled; also drive their UI with an explicit push.
+        void push(
+          tabId,
+          response.ok
+            ? { type: "at:show-translation", payload: response.payload }
+            : { type: "at:show-error", message: response.error },
+        );
+      }
+      try {
+        sendResponse(response);
+      } catch (error) {
+        console.warn("[ai-translator] reply port already closed", error);
+      }
+    };
     try {
       const result = await runTranslation(message.text, { from: message.from, to: message.to });
-      sendResponse({ ok: true, payload: toPayload(result) } satisfies ExtensionResponse);
+      reply({ ok: true, payload: toPayload(result) });
     } catch (error) {
-      sendResponse({
+      console.warn("[ai-translator] translation failed", error);
+      reply({
         ok: false,
         error: errorMessage(error),
         ...(isTranslatorError(error) ? { code: error.code } : {}),
-      } satisfies ExtensionResponse);
+      });
     }
   })();
   return true;

@@ -4,7 +4,13 @@ import { fileURLToPath } from "node:url";
 
 const SIZES = [16, 32, 48, 128];
 const ICONS_DIR = fileURLToPath(new URL("../icons/", import.meta.url));
-const BRAND = { from: [47, 107, 255], to: [122, 168, 255] };
+const WEB_ICON = fileURLToPath(new URL("../../web/public/icon-128.png", import.meta.url));
+const BRAND = { from: [77, 139, 251], to: [47, 107, 255] };
+const WHITE: Rgba = [255, 255, 255, 255];
+const TRANSPARENT: Rgba = [0, 0, 0, 0];
+
+type Rgba = [number, number, number, number];
+type Shape = (x: number, y: number) => number;
 
 const CRC_TABLE = (() => {
   const table = new Uint32Array(256);
@@ -49,29 +55,113 @@ function concat(parts: Uint8Array[]): Uint8Array {
   return out;
 }
 
-function insideRoundedRect(
-  x: number,
-  y: number,
-  left: number,
-  top: number,
-  right: number,
-  bottom: number,
-  radius: number,
-): boolean {
-  if (x < left || x > right || y < top || y > bottom) return false;
-  const clampedX = Math.min(Math.max(x, left + radius), right - radius);
-  const clampedY = Math.min(Math.max(y, top + radius), bottom - radius);
-  return Math.hypot(x - clampedX, y - clampedY) <= radius + 1e-9;
+/* ------------------------------------------------------------------ *
+ * Icon geometry, described with signed distance fields in a unit box *
+ * (0..1, y pointing down) and rasterised with supersampling below.    *
+ * ------------------------------------------------------------------ */
+
+function sdRoundRect(px: number, py: number, halfWidth: number, halfHeight: number, radius: number): number {
+  const qx = Math.abs(px) - (halfWidth - radius);
+  const qy = Math.abs(py) - (halfHeight - radius);
+  return Math.min(Math.max(qx, qy), 0) + Math.hypot(Math.max(qx, 0), Math.max(qy, 0)) - radius;
 }
 
-function shade(x: number, y: number, size: number): [number, number, number, number] {
-  const inset = size * 0.06;
-  const background = insideRoundedRect(x, y, inset, inset, size - inset, size - inset, size * 0.24);
-  const bar = size * 0.075 * 0.5;
-  const barOne = insideRoundedRect(x, y, size * 0.26, size * 0.3, size * 0.74, size * 0.44, bar);
-  const barTwo = insideRoundedRect(x, y, size * 0.26, size * 0.56, size * 0.58, size * 0.7, bar);
-  if (!background) return [0, 0, 0, 0];
-  if (barOne || barTwo) return [255, 255, 255, 255];
+function filledRect(cx: number, cy: number, halfWidth: number, halfHeight: number, radius: number): Shape {
+  return (x, y) => sdRoundRect(x - cx, y - cy, halfWidth, halfHeight, radius);
+}
+
+function strokedRect(
+  cx: number,
+  cy: number,
+  halfWidth: number,
+  halfHeight: number,
+  radius: number,
+  strokeHalf: number,
+): Shape {
+  return (x, y) => Math.abs(sdRoundRect(x - cx, y - cy, halfWidth, halfHeight, radius)) - strokeHalf;
+}
+
+function sdSegment(px: number, py: number, ax: number, ay: number, bx: number, by: number): number {
+  const pax = px - ax;
+  const pay = py - ay;
+  const bax = bx - ax;
+  const bay = by - ay;
+  const t = Math.max(0, Math.min(1, (pax * bax + pay * bay) / (bax * bax + bay * bay)));
+  return Math.hypot(pax - bax * t, pay - bay * t);
+}
+
+function strokedSegment(ax: number, ay: number, bx: number, by: number, half: number): Shape {
+  return (x, y) => sdSegment(x, y, ax, ay, bx, by) - half;
+}
+
+function strokedArc(
+  cx: number,
+  cy: number,
+  radius: number,
+  startDeg: number,
+  endDeg: number,
+  half: number,
+): Shape {
+  const toRadians = (degrees: number): number => (degrees * Math.PI) / 180;
+  const startX = cx + radius * Math.cos(toRadians(startDeg));
+  const startY = cy + radius * Math.sin(toRadians(startDeg));
+  const endX = cx + radius * Math.cos(toRadians(endDeg));
+  const endY = cy + radius * Math.sin(toRadians(endDeg));
+  return (x, y) => {
+    let angle = (Math.atan2(y - cy, x - cx) * 180) / Math.PI;
+    while (angle < startDeg) angle += 360;
+    while (angle > startDeg + 360) angle -= 360;
+    const distance = Math.hypot(x - cx, y - cy);
+    if (angle > endDeg) {
+      return Math.min(Math.hypot(x - startX, y - startY), Math.hypot(x - endX, y - endY)) - half;
+    }
+    return Math.abs(distance - radius) - half;
+  };
+}
+
+function union(...shapes: Shape[]): Shape {
+  return (x, y) => {
+    let nearest = Number.POSITIVE_INFINITY;
+    for (const shape of shapes) nearest = Math.min(nearest, shape(x, y));
+    return nearest;
+  };
+}
+
+const BACKGROUND = filledRect(0.5, 0.5, 0.47, 0.47, 0.22);
+const FRAME_A = strokedRect(0.375, 0.375, 0.225, 0.225, 0.085, 0.032);
+const FRAME_B = strokedRect(0.625, 0.625, 0.225, 0.225, 0.085, 0.032);
+/** Outer boundary of frame B: everything inside hides frame A, so B reads as the front card. */
+const FRAME_B_OUTER = filledRect(0.625, 0.625, 0.257, 0.257, 0.117);
+
+const GLYPH_ZHONG = union(
+  strokedSegment(0.315, 0.205, 0.315, 0.475, 0.024),
+  strokedRect(0.315, 0.335, 0.085, 0.057, 0.012, 0.022),
+);
+
+const GLYPH_A = union(
+  strokedSegment(0.625, 0.49, 0.552, 0.735, 0.022),
+  strokedSegment(0.625, 0.49, 0.698, 0.735, 0.022),
+  strokedSegment(0.577, 0.645, 0.673, 0.645, 0.019),
+);
+
+const ARC_TOP_RIGHT = strokedArc(0.598, 0.182, 0.122, -105, -10, 0.032);
+const ARC_BOTTOM_LEFT = strokedArc(0.402, 0.818, 0.122, 100, 170, 0.032);
+
+function shade(x: number, y: number, size: number): Rgba {
+  const unitX = x / size;
+  const unitY = y / size;
+  // Below 32px the glyph strokes fall under a pixel; keep the cleaner silhouette.
+  const showGlyphs = size >= 32;
+  if (BACKGROUND(unitX, unitY) > 0) return TRANSPARENT;
+  if (FRAME_B(unitX, unitY) <= 0) return WHITE;
+  if (showGlyphs && (GLYPH_ZHONG(unitX, unitY) <= 0 || GLYPH_A(unitX, unitY) <= 0)) return WHITE;
+  if (FRAME_B_OUTER(unitX, unitY) <= 0) return base(x, y, size);
+  if (FRAME_A(unitX, unitY) <= 0) return WHITE;
+  if (ARC_TOP_RIGHT(unitX, unitY) <= 0 || ARC_BOTTOM_LEFT(unitX, unitY) <= 0) return WHITE;
+  return base(x, y, size);
+}
+
+function base(x: number, y: number, size: number): Rgba {
   const t = Math.min(1, Math.max(0, (x + y) / (2 * size)));
   return [
     Math.round(BRAND.from[0]! + (BRAND.to[0]! - BRAND.from[0]!) * t),
@@ -82,7 +172,7 @@ function shade(x: number, y: number, size: number): [number, number, number, num
 }
 
 function renderIcon(size: number): Uint8Array {
-  const samples = 4;
+  const samples = 5;
   const rows = new Uint8Array((size * 4 + 1) * size);
   for (let y = 0; y < size; y += 1) {
     const rowStart = y * (size * 4 + 1);
@@ -145,6 +235,9 @@ export async function generateIcons(): Promise<string[]> {
     await writeFile(path, encodePng(size));
     written.push(path);
   }
+  await mkdir(fileURLToPath(new URL("../../web/public/", import.meta.url)), { recursive: true });
+  await writeFile(WEB_ICON, encodePng(128));
+  written.push(WEB_ICON);
   return written;
 }
 

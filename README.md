@@ -31,6 +31,8 @@ apps/extension/preview 扩展本地预览台（chrome.* 桩，加载真实入口
 | 语言/类型 | TypeScript 5（`strict` + `noUncheckedIndexedAccess`），测试由 Node 22 原生运行 `.ts` |
 | 引擎依赖 | 运行时零依赖（`packages/core` 是纯 TypeScript） |
 
+扩展图标由 `apps/extension/scripts/make-icons.ts` **程序化生成**（SDF 图形 + 5×5 超采样，无字体依赖）：蓝色圆角底 + 两个错位叠加的白框（后框「中」、前框「A」）+ 两段旋转弧线；16px 会自动省略字形只保留轮廓。`pnpm --filter @ai-translator/extension icons` 可重新生成，128px 同时作为 Web 端 favicon（`apps/web/public/icon-128.png`）。
+
 ## 快速开始
 
 前置要求：Node.js ≥ 22.6（可直接运行 TypeScript）、pnpm ≥ 9（依赖管理与脚本编排）。
@@ -57,6 +59,8 @@ pnpm preview:extension     # 本地预览扩展 UI：http://localhost:4174
 
 - `popup.html` — 打开即模拟「读取当前页面选区 → 翻译」
 - `content.html` — 拖选文字触发浮动「译」按钮；页面上的预览控制台还能直接模拟右键菜单与 `Alt+Shift+T`
+- `content.html?stale` — 模拟「扩展重新加载后页面里旧 content script 的 chrome.* 已失效」，用于验证此时会提示刷新页面而不是一直卡在「翻译中…」
+- `built.html` — **直接加载 `apps/extension/dist/content.js` 真实 IIFE 产物**并回显挂载状态，用来抓「dev 能跑、打包后挂掉」这类问题
 - `options.html` — 设置面板（增删模型服务、测试连接、术语表等）
 
 该目录只在本地预览时使用，不会被构建进 `apps/extension/dist`。
@@ -148,4 +152,6 @@ pnpm clean          # 清理 dist 与 node_modules
 - 页面内浮动卡片不处理 iframe 内的选区（`all_frames: false`），可在需要时打开。
 - 识别器聚焦主流语言；未收录语种（如荷兰语与南非语混合短句）会落到默认源语言。
 - 扩展的 Service Worker 会在空闲后被回收，译文缓存随内存一起消失。
-- content script 内联了 React（`content.js` 约 465 KB / gzip 约 144 KB），因为 MV3 不允许 content script 使用 ESM 分块；若在意体积可改用 Preact 或原生 DOM 实现该卡片。
+- 在 `chrome://extensions` **重新加载扩展后，已打开页面里的旧 content script 会失去 `chrome.*` 绑定**（UI 还在但调用已失效）。此时扩展会提示「扩展已重新加载，请刷新当前页面」，刷新页面即可恢复；`Alt+Shift+T` 与右键菜单不受影响，因为它们由后台重新注入/推送。
+- content script 内联了 React（`content.js` 约 143 KB / gzip 约 48 KB，已是 React 生产版），因为 MV3 不允许 content script 使用 ESM 分块；若在意体积可改用 Preact 或原生 DOM 实现该卡片。
+- 扩展的 IIFE 构建（lib 模式）**不会自动替换 `process.env.NODE_ENV`**，必须在 `apps/extension/vite.config.ts` 里显式 `define`，否则 React 会让脚本在加载时抛 `process is not defined`。`apps/extension/test/extension.test.ts` 里有对应的防回归断言。

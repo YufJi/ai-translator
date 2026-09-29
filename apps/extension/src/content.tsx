@@ -5,6 +5,7 @@ import { createRoot } from "react-dom/client";
 import type { BackgroundPush, ExtensionRequest, ExtensionResponse, TranslationPayload } from "./messages.ts";
 
 const MAX_SELECTION_CHARS = 6000;
+const REPLY_TIMEOUT_MS = 45_000;
 
 const STYLES = `
 :host { all: initial; }
@@ -71,35 +72,90 @@ function writeClipboard(text: string): void {
   });
 }
 
+/**
+ * After the extension is reloaded or updated, content scripts that are already
+ * running in open tabs lose their `chrome.*` bindings. Detect that instead of
+ * waiting forever for a reply that can never arrive.
+ */
+function contextAlive(): boolean {
+  try {
+    return Boolean(chrome.runtime?.id);
+  } catch {
+    return false;
+  }
+}
+
+const STALE_CONTEXT_MESSAGE = "扩展已重新加载，请刷新当前页面后再使用「译」。";
+
+function describeRuntimeFailure(message: string | undefined): string {
+  if (!message) return "扩展后台未响应";
+  if (/context invalidated|message port closed|Receiving end does not exist/iu.test(message)) {
+    return STALE_CONTEXT_MESSAGE;
+  }
+  return message;
+}
+
 function ContentApp({ host }: { host: HTMLElement }) {
   const [view, setView] = useState<View>({ kind: "hidden" });
   const pointer = useRef({ x: 24, y: 24 });
   const anchor = useRef({ x: 24, y: 24 });
   const pending = useRef("");
+  const inFlight = useRef<(() => void) | null>(null);
+
+  /**
+   * Settles the current request exactly once, whether the answer arrives as a
+   * direct reply or as a background push. `null` cancels without rendering,
+   * which is what "关闭" needs so a late timeout cannot reopen the card.
+   */
+  const finish = useCallback((next: View | null) => {
+    inFlight.current?.();
+    inFlight.current = null;
+    if (next) setView(next);
+  }, []);
 
   const requestTranslation = useCallback((text: string, position: { x: number; y: number }) => {
     const trimmed = text.trim();
     if (!trimmed) return;
     pending.current = trimmed;
+    finish(null);
     setView({ kind: "loading", x: position.x, y: position.y, text: trimmed });
+
+    const fail = (message: string): void =>
+      finish({ kind: "error", x: position.x, y: position.y, message });
+
+    const timer = setTimeout(() => {
+      fail("翻译超时未返回，请点击「重试」；若刚更新过扩展请先刷新页面。");
+    }, REPLY_TIMEOUT_MS);
+    inFlight.current = () => clearTimeout(timer);
+
+    if (!contextAlive()) {
+      fail(STALE_CONTEXT_MESSAGE);
+      return;
+    }
+
     const request: ExtensionRequest = { type: "at:translate", text: trimmed };
-    chrome.runtime.sendMessage(request, (response: ExtensionResponse | undefined) => {
-      if (chrome.runtime.lastError || !response) {
-        setView({
-          kind: "error",
-          x: position.x,
-          y: position.y,
-          message: chrome.runtime.lastError?.message ?? "扩展后台未响应",
-        });
-        return;
-      }
-      setView(
-        response.ok
-          ? { kind: "result", x: position.x, y: position.y, payload: response.payload }
-          : { kind: "error", x: position.x, y: position.y, message: response.error },
-      );
-    });
-  }, []);
+    try {
+      chrome.runtime.sendMessage(request, (response: ExtensionResponse | undefined) => {
+        let failure: string | undefined;
+        try {
+          failure = chrome.runtime.lastError?.message;
+        } catch {
+          failure = STALE_CONTEXT_MESSAGE;
+        }
+        if (failure || !response) {
+          fail(describeRuntimeFailure(failure));
+          return;
+        }
+        finish(
+          response.ok
+            ? { kind: "result", x: position.x, y: position.y, payload: response.payload }
+            : { kind: "error", x: position.x, y: position.y, message: response.error },
+        );
+      });
+    } catch {
+      fail(STALE_CONTEXT_MESSAGE);
+    }
+  }, [finish]);
 
   useEffect(() => {
     const insideHost = (event: Event): boolean => event.composedPath().includes(host);
@@ -124,7 +180,7 @@ function ContentApp({ host }: { host: HTMLElement }) {
       if (!insideHost(event)) setView((current) => (current.kind === "bubble" ? { kind: "hidden" } : current));
     };
     const onKeyDown = (event: KeyboardEvent): void => {
-      if (event.key === "Escape") setView({ kind: "hidden" });
+      if (event.key === "Escape") finish({ kind: "hidden" });
     };
 
     document.addEventListener("mousemove", onMouseMove);
@@ -137,7 +193,7 @@ function ContentApp({ host }: { host: HTMLElement }) {
       document.removeEventListener("mousedown", onMouseDown);
       document.removeEventListener("keydown", onKeyDown);
     };
-  }, [host]);
+  }, [finish, host]);
 
   useEffect(() => {
     const onMessage = (message: BackgroundPush): void => {
@@ -146,14 +202,20 @@ function ContentApp({ host }: { host: HTMLElement }) {
         pending.current = message.text;
         setView({ kind: "loading", x: position.x, y: position.y, text: message.text });
       } else if (message?.type === "at:show-translation") {
-        setView({ kind: "result", x: position.x, y: position.y, payload: message.payload });
+        finish({ kind: "result", x: position.x, y: position.y, payload: message.payload });
       } else if (message?.type === "at:show-error") {
-        setView({ kind: "error", x: position.x, y: position.y, message: message.message });
+        finish({ kind: "error", x: position.x, y: position.y, message: message.message });
       }
     };
     chrome.runtime.onMessage.addListener(onMessage);
-    return () => chrome.runtime.onMessage.removeListener(onMessage);
-  }, []);
+    return () => {
+      try {
+        chrome.runtime.onMessage.removeListener(onMessage);
+      } catch {
+        // The extension context may already be gone; nothing left to clean up.
+      }
+    };
+  }, [finish]);
 
   if (view.kind === "hidden") return null;
 
@@ -220,7 +282,7 @@ function ContentApp({ host }: { host: HTMLElement }) {
         >
           复制
         </button>
-        <button type="button" className="ghost" onClick={() => setView({ kind: "hidden" })}>
+        <button type="button" className="ghost" onClick={() => finish({ kind: "hidden" })}>
           关闭
         </button>
       </div>
@@ -231,6 +293,11 @@ function ContentApp({ host }: { host: HTMLElement }) {
 const host = document.createElement("div");
 host.id = "ai-translator-root";
 host.style.cssText = "all: initial; position: fixed; top: 0; left: 0; width: 0; height: 0;";
+
+// A page can keep an older instance around after an extension reload; its
+// chrome.* bindings are dead, so replace it instead of stacking a second UI.
+for (const stale of document.querySelectorAll(`#${host.id}`)) stale.remove();
+
 const shadow = host.attachShadow({ mode: "open" });
 const style = document.createElement("style");
 style.textContent = STYLES;
@@ -240,3 +307,9 @@ shadow.append(style, container);
 document.documentElement.append(host);
 
 createRoot(container).render(<ContentApp host={host} />);
+
+try {
+  console.info(`[ai-translator] content script ${chrome.runtime.getManifest().version} ready`);
+} catch {
+  console.info("[ai-translator] content script ready (context not available)");
+}

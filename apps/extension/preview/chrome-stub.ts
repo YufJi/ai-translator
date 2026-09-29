@@ -34,6 +34,16 @@ const state: StubState = {
   selectedText: "",
 };
 
+let staleContext = false;
+
+/**
+ * Simulates a content script whose extension context was invalidated by an
+ * extension reload: `chrome.runtime.id` disappears and API calls throw.
+ */
+export function setPreviewStaleContext(value: boolean): void {
+  staleContext = value;
+}
+
 export function setPreviewRole(role: PreviewRole): void {
   state.role = role;
 }
@@ -63,16 +73,24 @@ export function triggerCommand(command: string): void {
   for (const listener of state.commandListeners) listener(command as never);
 }
 
-function dispatch(listeners: AnyFn[], message: unknown, callback?: (response: unknown) => void): boolean {
+function dispatch(
+  listeners: AnyFn[],
+  message: unknown,
+  callback?: (response: unknown) => void,
+  tab?: { id: number },
+): boolean {
   let answered = false;
   const sendResponse = (response: unknown): void => {
     answered = true;
     callback?.(response);
   };
+  // Mirrors Chrome: only content scripts carry `sender.tab`, which is what the
+  // background uses to decide whether to push the result back to the page.
+  const sender = { id: "preview", url: location.href, ...(tab ? { tab } : {}) };
   for (const listener of listeners) {
     const result = (listener as (m: unknown, s: unknown, r: unknown) => unknown)(
       message,
-      { id: "preview", url: location.href },
+      sender,
       sendResponse,
     );
     if (result === true) return true;
@@ -85,14 +103,25 @@ export function installChromeStub(seed: Record<string, unknown> = {}): void {
   for (const [key, value] of Object.entries(seed)) state.storage.set(key, value);
   const chromeApi = {
     runtime: {
+      get id(): string | undefined {
+        return staleContext ? undefined : "ai-translator-preview";
+      },
       lastError: undefined as { message?: string } | undefined,
+      getManifest: () => ({ version: "0.1.0-preview" }),
       onInstalled: { addListener: (fn: AnyFn) => void state.installedListeners.push(fn) },
       onMessage: {
         addListener: (fn: AnyFn) =>
           void (state.role === "content" ? state.contentListeners : state.backgroundListeners).push(fn),
       },
-      sendMessage: (message: unknown, callback?: (response: unknown) => void) =>
-        dispatch(state.backgroundListeners, message, callback),
+      sendMessage: (message: unknown, callback?: (response: unknown) => void) => {
+        if (staleContext) throw new TypeError("Extension context invalidated.");
+        return dispatch(
+          state.backgroundListeners,
+          message,
+          callback,
+          state.role === "content" ? { id: 1 } : undefined,
+        );
+      },
       openOptionsPage: () => void window.open("./options.html", "_blank"),
       getURL: (path: string) => new URL(path, location.href).href,
     },

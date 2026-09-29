@@ -8,11 +8,13 @@ import {
   installChromeStub,
   setPreviewRole,
   setPreviewSelection,
+  setPreviewStaleContext,
   triggerCommand,
   triggerContextMenu,
 } from "../chrome-stub.ts";
 import "../preview.css";
 
+setPreviewStaleContext(new URLSearchParams(location.search).has("stale"));
 installChromeStub({ [CONFIG_STORAGE_KEY]: defaultConfig() });
 setPreviewSelection("Shortcuts are the fastest way to translate a sentence.");
 
@@ -54,4 +56,3 @@ createRoot(toolbarHost).render(
     <Toolbar />
   </StrictMode>,
 );
-

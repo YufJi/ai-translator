@@ -112,6 +112,20 @@ test("content and background bundles stay classic-script compatible", async (t) 
   }
 });
 
+test("bundles avoid node-only globals that would crash on load", async (t) => {
+  try {
+    await stat(distUrl);
+  } catch {
+    t.skip("run `npm run build:extension` to validate the bundles");
+    return;
+  }
+  for (const file of ["content.js", "background.js"]) {
+    const code = await readFile(new URL(`../dist/${file}`, import.meta.url), "utf8");
+    assert.doesNotMatch(code, /process\.env/u, `${file} references process.env (lib builds must define it)`);
+    assert.doesNotMatch(code, /\brequire\(/u, `${file} references require()`);
+  }
+});
+
 test("popup and options pages load a bundled script", async (t) => {
   try {
     await stat(distUrl);

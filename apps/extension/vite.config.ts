@@ -19,6 +19,9 @@ function staticAssets(): Plugin {
 }
 
 const shared: UserConfig = {
+  // lib/IIFE builds do not get Vite's automatic NODE_ENV replacement, and React
+  // reads process.env.NODE_ENV -> without this the content script dies on load.
+  define: { "process.env.NODE_ENV": JSON.stringify("production") },
   build: {
     target: "es2022",
     minify: true,

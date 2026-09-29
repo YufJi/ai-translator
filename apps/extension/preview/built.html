@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>扩展预览 · 构建产物</title>
+    <link rel="stylesheet" href="./preview.css" />
+  </head>
+  <body>
+    <main class="at-preview">
+      <div class="at-preview__banner">
+        <strong>构建产物验证</strong>
+        <span>本页加载的是 <code>apps/extension/dist/content.js</code>（真实 IIFE 产物），而非 Vite dev 源码。</span>
+        <span id="status">等待脚本…</span>
+      </div>
+      <article>
+        <h2>Bundle check</h2>
+        <p>
+          The quick brown fox jumps over the lazy dog. Translation quality depends on context,
+          terminology and the register of the target audience.
+        </p>
+      </article>
+    </main>
+    <script type="module">
+      import { defaultConfig } from "@ai-translator/core";
+      import { CONFIG_STORAGE_KEY } from "../src/messages.ts";
+      import { fireInstalled, installChromeStub, setPreviewRole, setPreviewSelection } from "./chrome-stub.ts";
+      import "./preview.css";
+
+      const status = document.getElementById("status");
+      const report = (text) => {
+        status.textContent = text;
+        status.dataset.state = text.startsWith("OK") ? "ok" : "bad";
+      };
+
+      window.addEventListener("error", (event) => report(`FAIL: ${event.message}`));
+
+      setPreviewSelection("Shortcuts are the fastest way to translate a sentence.");
+      installChromeStub({ [CONFIG_STORAGE_KEY]: defaultConfig() });
+      setPreviewRole("background");
+      await import("../src/background.ts");
+      fireInstalled();
+      setPreviewRole("content");
+
+      const script = document.createElement("script");
+      script.src = "/built-content.js";
+      script.onerror = () => report("FAIL: bundle did not load");
+      document.head.append(script);
+
+      setTimeout(() => {
+        const host = document.querySelector("#ai-translator-root");
+        report(
+          host
+            ? `OK: bundle mounted (host + shadow root ready)`
+            : "FAIL: bundle executed but never mounted a host element",
+        );
+      }, 1200);
+    </script>
+  </body>
+</html>
