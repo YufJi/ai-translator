@@ -5,7 +5,7 @@ import {
   parseConfig,
   type AppConfig,
   type ConfigStore,
-} from "../../../packages/core/src/index.ts";
+} from "@ai-translator/core";
 import { CONFIG_STORAGE_KEY } from "./messages.ts";
 
 /**
@@ -32,6 +32,11 @@ export class ChromeConfigStore implements ConfigStore {
   }
 
   load(): AppConfig {
+    return this.config;
+  }
+
+  refresh(): AppConfig {
+    // chrome.storage.onChanged keeps this instance up to date across contexts.
     return this.config;
   }
 

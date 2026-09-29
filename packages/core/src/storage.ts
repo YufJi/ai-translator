@@ -3,10 +3,13 @@ import { defaultConfig, parseConfig, type AppConfig, type ValidationResult } fro
 export const CONFIG_STORAGE_KEY = "ai-translator:config:v1";
 
 export interface ConfigStore {
+  /** Returns the current config. The returned reference is stable between changes. */
   load(): AppConfig;
   save(config: AppConfig): void;
   subscribe(listener: (config: AppConfig) => void): () => void;
   reset(): AppConfig;
+  /** Re-reads the backing storage; used for cross-tab synchronisation. */
+  refresh(): AppConfig;
 }
 
 export class MemoryConfigStore implements ConfigStore {
@@ -36,6 +39,10 @@ export class MemoryConfigStore implements ConfigStore {
     this.save(defaultConfig());
     return this.config;
   }
+
+  refresh(): AppConfig {
+    return this.config;
+  }
 }
 
 export interface StorageLike {
@@ -54,6 +61,11 @@ export class LocalStorageConfigStore implements ConfigStore {
     this.storage = storage;
     this.key = key;
     this.cache = this.read();
+    if (typeof globalThis.addEventListener === "function") {
+      globalThis.addEventListener("storage", (event) => {
+        if (event.key === null || event.key === this.key) this.refresh();
+      });
+    }
   }
 
   private read(): AppConfig {
@@ -65,7 +77,12 @@ export class LocalStorageConfigStore implements ConfigStore {
   }
 
   load(): AppConfig {
+    return this.cache;
+  }
+
+  refresh(): AppConfig {
     this.cache = this.read();
+    for (const listener of this.listeners) listener(this.cache);
     return this.cache;
   }
 

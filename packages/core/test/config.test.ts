@@ -162,6 +162,25 @@ test("memory store round trips and notifies subscribers", () => {
   assert.equal(store.reset().settings.tone, DEFAULT_SETTINGS.tone);
 });
 
+test("load returns a stable reference so React snapshot consumers do not loop", () => {
+  const store = new MemoryConfigStore();
+  assert.equal(store.load(), store.load());
+  const previous = store.load();
+  store.save({ ...previous, settings: { ...previous.settings, tone: "formal" } });
+  assert.notEqual(store.load(), previous);
+  assert.equal(store.load(), store.load());
+
+  const backing = new Map<string, string>();
+  const storage: StorageLike = {
+    getItem: (key) => backing.get(key) ?? null,
+    setItem: (key, value) => void backing.set(key, value),
+    removeItem: (key) => void backing.delete(key),
+  };
+  const local = new LocalStorageConfigStore(storage);
+  assert.equal(local.load(), local.load());
+  assert.equal(local.refresh(), local.load());
+});
+
 test("local storage store persists, ignores corrupt payloads and resets", () => {
   const backing = new Map<string, string>();
   const storage: StorageLike = {
@@ -180,4 +199,3 @@ test("local storage store persists, ignores corrupt payloads and resets", () => 
   store.reset();
   assert.equal(backing.has(CONFIG_STORAGE_KEY), false);
 });
-

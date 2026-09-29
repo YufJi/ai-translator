@@ -10,37 +10,50 @@
 ## 目录结构
 
 ```
-packages/core       翻译引擎：语言识别、提示词、分段、缓存、Provider 适配
-packages/ui         与框架无关的 DOM 组件（设置面板、语言选择、格式化）
-apps/web            Web 应用（Bun 打包，无框架）
-apps/extension      Chrome/Edge MV3 扩展（background / content / popup / options）
+packages/core          翻译引擎：语言识别、提示词、分段、缓存、Provider 适配（零运行时依赖）
+packages/ui            React 18 组件：设置面板、语言选择、格式化工具
+apps/web               Web 应用（Vite + React 18）
+apps/extension         Chrome/Edge MV3 扩展（Vite 打包：background / content / popup / options）
+apps/extension/preview 扩展本地预览台（chrome.* 桩，加载真实入口文件）
 ```
 
-`packages/core` 不依赖任何运行时 npm 包，也不依赖 DOM，因此同一份逻辑同时跑在浏览器、扩展 Service Worker 和 Node 测试里。
+`packages/core` 不依赖任何运行时 npm 包，也不依赖 DOM，因此同一份逻辑同时跑在浏览器、扩展 Service Worker 和 Node 测试里；React 只出现在 `packages/ui` 与两个应用外壳中。
+
+包间引用统一走包名（`@ai-translator/core`、`@ai-translator/ui`、`@ai-translator/ui/format`、`@ai-translator/ui/styles.css`）：pnpm 在 `apps/*/node_modules/@ai-translator/*` 建软链，各包 `exports` 直接指向 TypeScript 源码，所以 Vite、`tsc`、Node 都按标准解析，**不需要** `resolve.alias`，也不需要在 tsconfig 里重复维护 `paths`。
+
+## 技术栈
+
+| 关注点 | 选型 |
+| --- | --- |
+| 依赖管理 | pnpm workspace（`pnpm-workspace.yaml`，包间用 `workspace:*` 引用） |
+| 前端框架 | React 18.3（Web 与扩展共用同一批 `@ai-translator/ui` 组件） |
+| 构建 | Vite 8 + `@vitejs/plugin-react`（扩展额外产出两个自包含 IIFE bundle） |
+| 语言/类型 | TypeScript 5（`strict` + `noUncheckedIndexedAccess`），测试由 Node 22 原生运行 `.ts` |
+| 引擎依赖 | 运行时零依赖（`packages/core` 是纯 TypeScript） |
 
 ## 快速开始
 
-前置要求：Node.js ≥ 22.6（可直接运行 TypeScript）、Bun（打包）、pnpm（可选，仅用于开发依赖）。
+前置要求：Node.js ≥ 22.6（可直接运行 TypeScript）、pnpm ≥ 9（依赖管理与脚本编排）。
 
 ```bash
-# 安装开发依赖（仅 typescript / @types，用于类型检查）
+# 安装 workspace 内所有依赖
 pnpm install
 
 # Web 应用
-bun run build:web          # 产物在 apps/web/dist
-bun run dev:web            # 本地开发服务器 http://localhost:4173
+pnpm dev:web               # Vite 开发服务器 http://localhost:5173
+pnpm build:web             # 产物在 apps/web/dist
 
 # 浏览器扩展
-bun run build:extension    # 产物在 apps/extension/dist
-bun run dev:extension      # 监听改动自动重建
-bun run preview:extension  # 本地预览扩展 UI：http://localhost:4174
+pnpm build:extension       # 产物在 apps/extension/dist
+pnpm dev:extension         # 三个 target 并行 watch 重建
+pnpm preview:extension     # 本地预览扩展 UI：http://localhost:4174
 ```
 
 加载扩展：打开 `chrome://extensions` → 打开「开发者模式」→「加载已解压的扩展程序」→ 选择 `apps/extension/dist`。
 
 ### 不安装也能验证扩展
 
-`apps/extension/preview/` 提供一份最小的 `chrome.*` 桩（`chrome-stub.ts`，实现了 `runtime` 消息、`storage`、`tabs`、`scripting`、`contextMenus`、`commands`），并用它加载扩展的**真实入口文件** `background.ts` / `content.ts` / `popup.ts` / `options.ts`，翻译走离线演示 Provider。因此无需把扩展装进浏览器即可验证三条入口：
+`apps/extension/preview/` 提供一份最小的 `chrome.*` 桩（`chrome-stub.ts`，实现了 `runtime` 消息、`storage`、`tabs`、`scripting`、`contextMenus`、`commands`），并用它加载扩展的**真实入口文件** `background.ts` / `content.tsx` / `popup.tsx` / `options.tsx`，翻译走离线演示 Provider。因此无需把扩展装进浏览器即可验证三条入口：
 
 - `popup.html` — 打开即模拟「读取当前页面选区 → 翻译」
 - `content.html` — 拖选文字触发浮动「译」按钮；页面上的预览控制台还能直接模拟右键菜单与 `Alt+Shift+T`
@@ -107,21 +120,27 @@ await translator.checkProvider();                   // 连通性自检
 ## 开发
 
 ```bash
-npm run typecheck   # tsc 全量类型检查
-npm test            # node --test，77 个用例（引擎 / 识别 / 分段 / Provider / 配置 / 端到端 / 扩展清单）
-npm run check       # typecheck + test
-npm run verify      # build + typecheck + test（会让扩展产物相关用例真正执行）
-npm run build       # 构建 web + extension
+pnpm typecheck      # tsc 全量类型检查（含 vite 配置与预览台）
+pnpm test           # node --test，78 个用例（引擎 / 识别 / 分段 / Provider / 配置 / 端到端 / 扩展清单）
+pnpm check          # typecheck + test
+pnpm verify         # build + typecheck + test（会让扩展产物相关用例真正执行）
+pnpm build          # 构建 web + extension
+pnpm clean          # 清理 dist 与 node_modules
 ```
 
 测试直接运行 TypeScript（Node 22 原生类型剥离），无需构建步骤；Provider 测试通过注入 `fetchImpl` 桩实现，不发真实请求；扩展的清单/图标/产物校验在 `apps/extension/test/extension.test.ts`，未构建时会跳过产物相关断言。
 
-## 关于外壳与「基座」
+### 扩展的三种 Vite 产物
 
-`packages/core` 与 `packages/ui` 不依赖任何视图框架，也不依赖扩展框架。当前外壳是「原生 MV3 + Bun 打包」，因此若需要换成某个特定基座（例如 WXT / Plasmo / CRXJS 之类的扩展框架，或 Vite / Next 之类的 Web 框架），只需要替换 `apps/*`：
+`apps/extension/vite.config.ts` 用 `BUILD_TARGET` 切换三个目标，`pnpm build:extension` 依次执行：
 
-- 会被替换的外壳代码：`apps/extension/src/{background,content,popup,options}.ts`、`manifest.json`、`apps/extension/build.ts` 与 `apps/web/src/main.ts`、`apps/web/index.html`
-- 可以原样复用的部分：`packages/core`（引擎与 Provider）、`packages/ui`（设置面板与格式化）、`apps/extension/src/store.ts`（配置存储适配）
+| target | 产物 | 说明 |
+| --- | --- | --- |
+| `pages` | `popup.html`、`options.html` + `assets/*` | 多页面 React 应用，并把 `manifest.json` 与 `icons/` 拷进 `dist/` |
+| `background` | `background.js` | 自包含 IIFE，无需 `"type": "module"` |
+| `content` | `content.js` | 自包含 IIFE，MV3 content script 必须是经典脚本 |
+
+如果要换成某个扩展框架（WXT / Plasmo / CRXJS 等），只需要替换 `apps/extension/{manifest.json,vite.config.ts,src/*}`；`packages/core`、`packages/ui` 与 `apps/extension/src/store.ts` 可原样复用。
 
 ## 已知限制
 
@@ -129,3 +148,4 @@ npm run build       # 构建 web + extension
 - 页面内浮动卡片不处理 iframe 内的选区（`all_frames: false`），可在需要时打开。
 - 识别器聚焦主流语言；未收录语种（如荷兰语与南非语混合短句）会落到默认源语言。
 - 扩展的 Service Worker 会在空闲后被回收，译文缓存随内存一起消失。
+- content script 内联了 React（`content.js` 约 465 KB / gzip 约 144 KB），因为 MV3 不允许 content script 使用 ESM 分块；若在意体积可改用 Preact 或原生 DOM 实现该卡片。

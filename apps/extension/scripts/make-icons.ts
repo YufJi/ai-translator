@@ -148,8 +148,5 @@ export async function generateIcons(): Promise<string[]> {
   return written;
 }
 
-if (import.meta.main) {
-  const paths = await generateIcons();
-  console.log(`[extension] generated ${paths.length} icons`);
-}
-
+const paths = await generateIcons();
+console.log(`[extension] generated ${paths.length} icons in apps/extension/icons`);

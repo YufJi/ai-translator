@@ -1,4 +1,4 @@
-import { defaultConfig } from "../../../../packages/core/src/index.ts";
+import { defaultConfig } from "@ai-translator/core";
 import { CONFIG_STORAGE_KEY } from "../../src/messages.ts";
 import { fireInstalled, installChromeStub, setPreviewRole, setPreviewSelection } from "../chrome-stub.ts";
 
@@ -10,6 +10,5 @@ await import("../../src/background.ts");
 fireInstalled();
 
 setPreviewRole("popup");
-await import("../../src/popup.ts");
+await import("../../src/popup.tsx");
 
-document.body.dataset.ready = "true";

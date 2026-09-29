@@ -1,7 +1,7 @@
 /// <reference types="chrome" />
 
-import { Translator, isTranslatorError, type TranslationResult } from "../../../packages/core/src/index.ts";
-import { errorMessage } from "../../../packages/ui/src/format.ts";
+import { Translator, isTranslatorError, type TranslationResult } from "@ai-translator/core";
+import { errorMessage } from "@ai-translator/ui/format";
 import type { BackgroundPush, ExtensionRequest, ExtensionResponse, TranslationPayload } from "./messages.ts";
 import { getConfigStore } from "./store.ts";
 

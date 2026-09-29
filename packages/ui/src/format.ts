@@ -1,51 +1,11 @@
 import {
-  LANGUAGES,
-  baseLanguage,
   type AppConfig,
   type GlossaryEntry,
-  type LanguageDef,
   type TranslationResult,
   type TokenUsage,
-} from "../../core/src/index.ts";
+} from "@ai-translator/core";
 
 export const AUTO_LABEL = "自动识别";
-
-export function languageOptions(
-  doc: Document,
-  options: { includeAuto?: boolean; selected?: string } = {},
-): HTMLOptionElement[] {
-  const items: HTMLOptionElement[] = [];
-  const push = (value: string, label: string, disabled = false): void => {
-    const option = doc.createElement("option");
-    option.value = value;
-    option.textContent = label;
-    option.disabled = disabled;
-    items.push(option);
-  };
-  if (options.includeAuto !== false) push("auto", AUTO_LABEL);
-  const primary = LANGUAGES.filter((language) => PINNED.includes(language.tag));
-  const rest = LANGUAGES.filter((language) => !PINNED.includes(language.tag));
-  for (const language of [...primary, ...rest]) push(language.tag, languageLabel(language));
-  return items;
-}
-
-const PINNED = ["zh-Hans", "zh-Hant", "en-US", "ja", "ko"];
-
-export function languageLabel(language: LanguageDef): string {
-  return `${language.name} · ${language.tag}`;
-}
-
-export function fillLanguageSelect(
-  select: HTMLSelectElement,
-  options: { includeAuto?: boolean; selected?: string } = {},
-): void {
-  select.replaceChildren(...languageOptions(select.ownerDocument, options));
-  if (options.selected) select.value = normalizeForSelect(options.selected);
-}
-
-export function normalizeForSelect(tag: string): string {
-  return LANGUAGES.find((language) => language.tag.toLowerCase() === tag.toLowerCase())?.tag ?? tag;
-}
 
 export function detectionBadge(result: TranslationResult): string {
   const { source, target } = result;
@@ -102,10 +62,6 @@ export function formatGlossaryText(entries: readonly GlossaryEntry[]): string {
   return entries.map((entry) => `${entry.source} = ${entry.target}`).join("\n");
 }
 
-export function sameLanguageFamily(a: string, b: string): boolean {
-  return baseLanguage(a) === baseLanguage(b);
-}
-
 export function activeProviderLabel(config: AppConfig): string {
   const provider = config.providers.find((entry) => entry.id === config.activeProviderId) ?? config.providers[0];
   if (!provider) return "未配置模型";
@@ -121,16 +77,6 @@ export async function copyText(text: string): Promise<boolean> {
   }
 }
 
-export function downloadFile(filename: string, contents: string, type = "application/json"): void {
-  const blob = new Blob([contents], { type });
-  const url = URL.createObjectURL(blob);
-  const anchor = document.createElement("a");
-  anchor.href = url;
-  anchor.download = filename;
-  anchor.click();
-  setTimeout(() => URL.revokeObjectURL(url), 1_000);
-}
-
 export function errorMessage(error: unknown): string {
   if (error && typeof error === "object" && "message" in error) {
     const message = String((error as { message: unknown }).message);
@@ -139,4 +85,3 @@ export function errorMessage(error: unknown): string {
   }
   return String(error);
 }
-

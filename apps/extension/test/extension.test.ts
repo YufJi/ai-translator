@@ -30,7 +30,10 @@ test("manifest declares a valid MV3 extension surface", async () => {
   assert.ok(manifest.name.length > 0);
   assert.match(manifest.version, /^\d+\.\d+\.\d+$/u);
   assert.equal(manifest.background.service_worker, "background.js");
-  assert.equal(manifest.background.type, "module");
+  assert.ok(
+    manifest.background.type === undefined || manifest.background.type === "module",
+    "background.type must be omitted or set to module",
+  );
   assert.equal(manifest.action.default_popup, "popup.html");
   assert.equal(manifest.options_page, "options.html");
   assert.ok(manifest.permissions.includes("storage"));
@@ -120,6 +123,6 @@ test("popup and options pages load a bundled script", async (t) => {
     const html = await readFile(new URL(`../dist/${page}`, import.meta.url), "utf8");
     const src = /<script[^>]+src="([^"]+)"/u.exec(html)?.[1];
     assert.ok(src, `${page} must reference a bundled script`);
-    await stat(new URL(`../dist/${src.replace(/^\.\//u, "")}`, import.meta.url));
+    await stat(new URL(`../dist/${src.replace(/^\.?\//u, "")}`, import.meta.url));
   }
 });
