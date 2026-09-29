@@ -7,6 +7,14 @@
 - 内置桌面级翻译工作台：流式输出、术语表约束、语气/领域控制、译文缓存、长文自动分段
 - 扩展形态：**选中即译**（浮动按钮 + 右键菜单 + `Alt+Shift+T` 快捷键）、弹窗快速翻译、设置页
 
+## 界面
+
+| Web 翻译工作台 | 扩展：选中即译 |
+| --- | --- |
+| ![Web 翻译工作台](docs/screenshots/web-workbench.png) | ![在页面中选中文字后弹出的翻译卡片](docs/screenshots/extension-inline.png) |
+
+两张截图都用内置的**离线演示 Provider** 录制（无需 API Key），可直接复现：`pnpm dev:web` 与 `pnpm preview:extension`。
+
 ## 目录结构
 
 ```
@@ -15,6 +23,7 @@ packages/ui            React 18 组件：设置面板、语言选择、格式化
 apps/web               Web 应用（Vite + React 18）
 apps/extension         Chrome/Edge MV3 扩展（Vite 打包：background / content / popup / options）
 apps/extension/preview 扩展本地预览台（chrome.* 桩，加载真实入口文件）
+AGENTS.md              贡献约定：目录职责、命令、风格、测试与提交规范
 ```
 
 `packages/core` 不依赖任何运行时 npm 包，也不依赖 DOM，因此同一份逻辑同时跑在浏览器、扩展 Service Worker 和 Node 测试里；React 只出现在 `packages/ui` 与两个应用外壳中。
@@ -29,6 +38,7 @@ apps/extension/preview 扩展本地预览台（chrome.* 桩，加载真实入口
 | 前端框架 | React 18.3（Web 与扩展共用同一批 `@ai-translator/ui` 组件） |
 | 构建 | Vite 8 + `@vitejs/plugin-react`（扩展额外产出两个自包含 IIFE bundle） |
 | 语言/类型 | TypeScript 5（`strict` + `noUncheckedIndexedAccess`），测试由 Node 22 原生运行 `.ts` |
+| 测试 | Node 22 内置 `node:test`，79 个用例（71 引擎 + 8 扩展清单/产物） |
 | 引擎依赖 | 运行时零依赖（`packages/core` 是纯 TypeScript） |
 
 扩展图标由 `apps/extension/scripts/make-icons.ts` **程序化生成**（SDF 图形 + 5×5 超采样，无字体依赖）：蓝色圆角底 + 两个错位叠加的白框（后框「中」、前框「A」）+ 两段旋转弧线；16px 会自动省略字形只保留轮廓。`pnpm --filter @ai-translator/extension icons` 可重新生成，128px 同时作为 Web 端 favicon（`apps/web/public/icon-128.png`）。
@@ -55,7 +65,7 @@ pnpm preview:extension     # 本地预览扩展 UI：http://localhost:4174
 
 ### 不安装也能验证扩展
 
-`apps/extension/preview/` 提供一份最小的 `chrome.*` 桩（`chrome-stub.ts`，实现了 `runtime` 消息、`storage`、`tabs`、`scripting`、`contextMenus`、`commands`），并用它加载扩展的**真实入口文件** `background.ts` / `content.tsx` / `popup.tsx` / `options.tsx`，翻译走离线演示 Provider。因此无需把扩展装进浏览器即可验证三条入口：
+`apps/extension/preview/` 提供一份最小的 `chrome.*` 桩（`chrome-stub.ts`，实现了 `runtime` 消息、`storage`、`tabs`、`scripting`、`contextMenus`、`commands`），并用它加载扩展的**真实入口文件** `background.ts` / `content.tsx` / `popup.tsx` / `options.tsx`，翻译走离线演示 Provider。因此无需把扩展装进浏览器即可验证各入口与边界场景：
 
 - `popup.html` — 打开即模拟「读取当前页面选区 → 翻译」
 - `content.html` — 拖选文字触发浮动「译」按钮；页面上的预览控制台还能直接模拟右键菜单与 `Alt+Shift+T`
@@ -63,7 +73,7 @@ pnpm preview:extension     # 本地预览扩展 UI：http://localhost:4174
 - `built.html` — **直接加载 `apps/extension/dist/content.js` 真实 IIFE 产物**并回显挂载状态，用来抓「dev 能跑、打包后挂掉」这类问题
 - `options.html` — 设置面板（增删模型服务、测试连接、术语表等）
 
-该目录只在本地预览时使用，不会被构建进 `apps/extension/dist`。
+该目录只在本地预览时使用，不会被构建进 `apps/extension/dist`；给页面加上 `?bare` 可隐藏预览工具条（README 截图就是这么来的）。
 
 首次打开无需任何 API Key：默认启用内置的 **离线演示 Provider**，用内置词典演示完整链路（识别 → 分段 → 请求 → 流式渲染 → 缓存）。要翻译真实内容，请在「设置 → 模型服务」里添加你自己的模型服务。
 
@@ -125,7 +135,7 @@ await translator.checkProvider();                   // 连通性自检
 
 ```bash
 pnpm typecheck      # tsc 全量类型检查（含 vite 配置与预览台）
-pnpm test           # node --test，78 个用例（引擎 / 识别 / 分段 / Provider / 配置 / 端到端 / 扩展清单）
+pnpm test           # node --test，79 个用例（71 引擎案例 + 8 扩展案例）
 pnpm check          # typecheck + test
 pnpm verify         # build + typecheck + test（会让扩展产物相关用例真正执行）
 pnpm build          # 构建 web + extension
@@ -133,6 +143,8 @@ pnpm clean          # 清理 dist 与 node_modules
 ```
 
 测试直接运行 TypeScript（Node 22 原生类型剥离），无需构建步骤；Provider 测试通过注入 `fetchImpl` 桩实现，不发真实请求；扩展的清单/图标/产物校验在 `apps/extension/test/extension.test.ts`，未构建时会跳过产物相关断言。
+
+改动前请先读 `AGENTS.md`：它规定了 `packages/core` 的依赖边界、命名与缩进约定、测试要求，以及扩展改动的验证路径（`pnpm verify` + 预览台 `built.html`）。
 
 ### 扩展的三种 Vite 产物
 

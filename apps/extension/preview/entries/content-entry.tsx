@@ -50,9 +50,12 @@ function Toolbar() {
 }
 
 const toolbarHost = document.createElement("div");
-document.body.prepend(toolbarHost);
-createRoot(toolbarHost).render(
-  <StrictMode>
-    <Toolbar />
-  </StrictMode>,
-);
+// `?bare` hides the preview chrome, which is what doc screenshots want.
+if (!new URLSearchParams(location.search).has("bare")) {
+  document.body.prepend(toolbarHost);
+  createRoot(toolbarHost).render(
+    <StrictMode>
+      <Toolbar />
+    </StrictMode>,
+  );
+}
