@@ -63,6 +63,18 @@ pnpm preview:extension     # 本地预览扩展 UI：http://localhost:4174
 
 加载扩展：打开 `chrome://extensions` → 打开「开发者模式」→「加载已解压的扩展程序」→ 选择 `apps/extension/dist`。
 
+## 发布扩展
+
+`.github/workflows/release-extension.yml` 负责产出可直接加载 / 上传商店的扩展压缩包：
+
+1. 先把 `apps/extension/manifest.json` 的 `version` 改成要发布的版本（Chrome 要求版本递增）
+2. 打 tag 并推送：`git tag v0.1.0 && git push origin v0.1.0`
+3. workflow 依次执行 `pnpm verify` → 打包 → 上传 artifact → 创建（或更新）Release，附件为 `ai-translator-extension-v0.1.0.zip`
+
+tag 与 manifest 版本不一致会直接失败，避免发出「tag 是 0.2.0、包里是 0.1.0」的包。也可以在 Actions 里手动 `workflow_dispatch` 试跑：只产出 artifact、不创建 Release，重复跑同一个 tag 会覆盖已有附件。压缩包内 `manifest.json` 位于根目录，sourcemap 不入包。
+
+本地复现同样的产物：`pnpm build:extension && (cd apps/extension/dist && zip -r ../../../extension.zip . -x '*.map')`。
+
 ### 不安装也能验证扩展
 
 `apps/extension/preview/` 提供一份最小的 `chrome.*` 桩（`chrome-stub.ts`，实现了 `runtime` 消息、`storage`、`tabs`、`scripting`、`contextMenus`、`commands`），并用它加载扩展的**真实入口文件** `background.ts` / `content.tsx` / `popup.tsx` / `options.tsx`，翻译走离线演示 Provider。因此无需把扩展装进浏览器即可验证各入口与边界场景：

@@ -9,3 +9,4 @@ coverage/
 .turbo/
 .vite/
 vite.config.ts.timestamp-*
+*.zip
