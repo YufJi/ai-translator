@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <title>扩展本地预览</title>
+    <link rel="stylesheet" href="../../../packages/ui/src/styles.css" />
+    <link rel="stylesheet" href="./preview.css" />
+  </head>
+  <body>
+    <main class="at-preview">
+      <h1>浏览器扩展本地预览</h1>
+      <p class="at-preview__hint">
+        这里用一份最小 <code>chrome.*</code> 桩（<code>preview/chrome-stub.ts</code>）加载扩展的真实入口
+        <code>background.ts</code> / <code>content.ts</code> / <code>popup.ts</code> / <code>options.ts</code>，
+        翻译走离线演示 Provider，因此无需加载到 Chrome 也能验证交互。
+      </p>
+      <ul>
+        <li><a href="./popup.html">弹窗（popup）</a> — 打开即自动读取页面选区并翻译</li>
+        <li><a href="./options.html">设置页（options）</a> — 模型服务与翻译设置</li>
+        <li><a href="./content.html">页面内翻译（content）</a> — 拖选文字 / 模拟右键菜单 / 模拟快捷键</li>
+      </ul>
+      <p class="at-preview__hint">真正安装到浏览器时请加载 <code>apps/extension/dist</code>。</p>
+    </main>
+  </body>
+</html>
+

@@ -1,0 +1,16 @@
+{
+  "name": "@ai-translator/core",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Provider-agnostic AI translation engine: language detection, prompt building, chunking, caching, and pluggable model providers.",
+  "exports": {
+    ".": "./src/index.ts",
+    "./providers": "./src/providers/registry.ts",
+    "./presets": "./src/providers/presets.ts"
+  },
+  "scripts": {
+    "test": "node --test test/*.test.ts"
+  }
+}
+

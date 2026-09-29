@@ -1,0 +1,42 @@
+body.at-options {
+  padding: 32px 20px 64px;
+}
+
+.at-options__intro {
+  max-width: 900px;
+  margin: 0 auto 16px;
+}
+
+.at-options__intro h1 {
+  margin: 0 0 6px;
+  font-size: 20px;
+}
+
+.at-options__intro p {
+  margin: 0;
+  font-size: 13px;
+  color: var(--at-text-muted);
+}
+
+.at-options .at-panel {
+  position: static;
+  inset: auto;
+  width: min(900px, 100%);
+  max-width: 900px;
+  margin: 0 auto;
+  display: flex;
+  border: 1px solid var(--at-border);
+  border-radius: var(--at-radius);
+  box-shadow: none;
+  overflow: visible;
+}
+
+.at-options .at-panel__head .at-btn {
+  display: none;
+}
+
+.at-options .at-panel__body {
+  max-height: none;
+  overflow: visible;
+}
+
