@@ -1,5 +1,6 @@
 import { defaultConfig } from "@ai-translator/core";
 import "@ai-translator/ui/styles.css";
+import { shortcutLabel } from "@ai-translator/ui";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { CONFIG_STORAGE_KEY } from "../../src/messages.ts";
@@ -42,7 +43,7 @@ function Toolbar() {
         className="at-btn at-btn--ghost"
         onClick={() => triggerCommand("translate-selection")}
       >
-        模拟 Alt+Shift+T 快捷键
+        模拟 {shortcutLabel()} 快捷键
       </button>
       <span className="at-preview__hint">（此处 chrome.* 由本地桩实现填充，翻译走离线演示 Provider）</span>
     </div>

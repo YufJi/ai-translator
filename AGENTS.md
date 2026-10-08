@@ -7,7 +7,7 @@
 - `apps/web` — Vite + React workbench (`src/App.tsx`, `vite.config.ts`).
 - `apps/extension` — MV3 extension (`src/{background,content,popup,options}`, `manifest.json`, generated `icons/`).
 - `apps/extension/preview` — browser harness running the real entry files against a `chrome.*` stub; dev-only.
-- Tests sit beside their scope: `packages/core/test/`, `apps/extension/test/`.
+- Tests sit beside their scope: `packages/core/test/`, `packages/ui/test/`, `apps/extension/test/`.
 
 ## Build, Test, and Development Commands
 
@@ -17,7 +17,7 @@ pnpm dev:web                # Vite dev server → http://localhost:5173
 pnpm preview:extension      # extension harness → http://localhost:4174
 pnpm build                  # build web + extension (3 Vite targets)
 pnpm typecheck              # tsc across the workspace
-pnpm test                   # node --test (79 cases)
+pnpm test                   # node --test (81 cases)
 pnpm verify                 # build + typecheck + test — required before a PR
 ```
 

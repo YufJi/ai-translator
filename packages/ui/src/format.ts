@@ -85,3 +85,17 @@ export function errorMessage(error: unknown): string {
   }
   return String(error);
 }
+
+function currentPlatform(): string {
+  if (typeof navigator === "undefined") return "";
+  return navigator.platform || navigator.userAgent || "";
+}
+
+/**
+ * Chrome registers the manifest's `Alt+Shift+T` as ⌥⇧T on macOS (its `Alt`
+ * modifier *is* the Option key), so the copy must name the key that is actually
+ * printed on the keyboard. `darwin` covers Node's platform string in tests.
+ */
+export function shortcutLabel(platform: string = currentPlatform()): string {
+  return /mac|darwin|iphone|ipad/i.test(platform) ? "⌥⇧T" : "Alt+Shift+T";
+}

@@ -5,6 +5,7 @@ import {
   copyText,
   errorMessage,
   LanguageSelect,
+  shortcutLabel,
   useConfig,
 } from "@ai-translator/ui";
 import "@ai-translator/ui/styles.css";
@@ -164,7 +165,7 @@ export function PopupApp() {
       {error ? <p className="at-popup__error">{error}</p> : null}
 
       <p className="at-popup__hint">
-        在网页中选中文字后点击浮动「译」按钮，或使用快捷键 Alt+Shift+T 直接翻译，无需打开本窗口。
+        在网页中选中文字后点击浮动「译」按钮，或使用快捷键 {shortcutLabel()} 直接翻译，无需打开本窗口。
       </p>
     </section>
   );

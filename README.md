@@ -5,7 +5,7 @@
 - 可接入任意 **自定义大模型 Provider**（OpenAI 兼容协议 / Anthropic / Gemini，含本地 Ollama、LM Studio、自建网关）
 - 翻译 **from → to** 支持 **自动识别源语言**，覆盖中文（简/繁）、英语（美/英）、日语、韩语等 31 种主流语言
 - 内置桌面级翻译工作台：流式输出、术语表约束、语气/领域控制、译文缓存、长文自动分段
-- 扩展形态：**选中即译**（浮动按钮 + 右键菜单 + `Alt+Shift+T` 快捷键）、弹窗快速翻译、设置页
+- 扩展形态：**选中即译**（浮动按钮 + 右键菜单 + `Alt+Shift+T` 快捷键，macOS 上是 `⌥⇧T`）、弹窗快速翻译、设置页
 
 ## 界面
 
@@ -38,7 +38,7 @@ AGENTS.md              贡献约定：目录职责、命令、风格、测试与
 | 前端框架 | React 18.3（Web 与扩展共用同一批 `@ai-translator/ui` 组件） |
 | 构建 | Vite 8 + `@vitejs/plugin-react`（扩展额外产出两个自包含 IIFE bundle） |
 | 语言/类型 | TypeScript 5（`strict` + `noUncheckedIndexedAccess`），测试由 Node 22 原生运行 `.ts` |
-| 测试 | Node 22 内置 `node:test`，79 个用例（71 引擎 + 8 扩展清单/产物） |
+| 测试 | Node 22 内置 `node:test`，81 个用例（71 引擎 + 2 UI + 8 扩展清单/产物） |
 | 引擎依赖 | 运行时零依赖（`packages/core` 是纯 TypeScript） |
 
 扩展图标由 `apps/extension/scripts/make-icons.ts` **程序化生成**（SDF 图形 + 5×5 超采样，无字体依赖）：蓝色圆角底 + 两个错位叠加的白框（后框「中」、前框「A」）+ 两段旋转弧线；16px 会自动省略字形只保留轮廓。`pnpm --filter @ai-translator/extension icons` 可重新生成，128px 同时作为 Web 端 favicon（`apps/web/public/icon-128.png`）。
@@ -80,7 +80,7 @@ tag 与 manifest 版本不一致会直接失败，避免发出「tag 是 0.2.0�
 `apps/extension/preview/` 提供一份最小的 `chrome.*` 桩（`chrome-stub.ts`，实现了 `runtime` 消息、`storage`、`tabs`、`scripting`、`contextMenus`、`commands`），并用它加载扩展的**真实入口文件** `background.ts` / `content.tsx` / `popup.tsx` / `options.tsx`，翻译走离线演示 Provider。因此无需把扩展装进浏览器即可验证各入口与边界场景：
 
 - `popup.html` — 打开即模拟「读取当前页面选区 → 翻译」
-- `content.html` — 拖选文字触发浮动「译」按钮；页面上的预览控制台还能直接模拟右键菜单与 `Alt+Shift+T`
+- `content.html` — 拖选文字触发浮动「译」按钮；页面上的预览控制台还能直接模拟右键菜单与快捷键
 - `content.html?stale` — 模拟「扩展重新加载后页面里旧 content script 的 chrome.* 已失效」，用于验证此时会提示刷新页面而不是一直卡在「翻译中…」
 - `built.html` — **直接加载 `apps/extension/dist/content.js` 真实 IIFE 产物**并回显挂载状态，用来抓「dev 能跑、打包后挂掉」这类问题
 - `options.html` — 设置面板（增删模型服务、测试连接、术语表等）
@@ -147,7 +147,7 @@ await translator.checkProvider();                   // 连通性自检
 
 ```bash
 pnpm typecheck      # tsc 全量类型检查（含 vite 配置与预览台）
-pnpm test           # node --test，79 个用例（71 引擎案例 + 8 扩展案例）
+pnpm test           # node --test，81 个用例（71 引擎 + 2 UI + 8 扩展）
 pnpm check          # typecheck + test
 pnpm verify         # build + typecheck + test（会让扩展产物相关用例真正执行）
 pnpm build          # 构建 web + extension
@@ -176,6 +176,7 @@ pnpm clean          # 清理 dist 与 node_modules
 - 页面内浮动卡片不处理 iframe 内的选区（`all_frames: false`），可在需要时打开。
 - 识别器聚焦主流语言；未收录语种（如荷兰语与南非语混合短句）会落到默认源语言。
 - 扩展的 Service Worker 会在空闲后被回收，译文缓存随内存一起消失。
-- 在 `chrome://extensions` **重新加载扩展后，已打开页面里的旧 content script 会失去 `chrome.*` 绑定**（UI 还在但调用已失效）。此时扩展会提示「扩展已重新加载，请刷新当前页面」，刷新页面即可恢复；`Alt+Shift+T` 与右键菜单不受影响，因为它们由后台重新注入/推送。
+- 在 `chrome://extensions` **重新加载扩展后，已打开页面里的旧 content script 会失去 `chrome.*` 绑定**（UI 还在但调用已失效）。此时扩展会提示「扩展已重新加载，请刷新当前页面」，刷新页面即可恢复；快捷键与右键菜单不受影响，因为它们由后台重新注入/推送。
+- 快捷键在 manifest 里写作 `Alt+Shift+T`，Chrome 在 macOS 上会把 `Alt` 映射成 Option，实际按键是 `⌥⇧T`，界面文案会按平台自动切换。若与其它应用冲突，可在 `chrome://extensions/shortcuts` 改绑。
 - content script 内联了 React（`content.js` 约 143 KB / gzip 约 48 KB，已是 React 生产版），因为 MV3 不允许 content script 使用 ESM 分块；若在意体积可改用 Preact 或原生 DOM 实现该卡片。
 - 扩展的 IIFE 构建（lib 模式）**不会自动替换 `process.env.NODE_ENV`**，必须在 `apps/extension/vite.config.ts` 里显式 `define`，否则 React 会让脚本在加载时抛 `process is not defined`。`apps/extension/test/extension.test.ts` 里有对应的防回归断言。
